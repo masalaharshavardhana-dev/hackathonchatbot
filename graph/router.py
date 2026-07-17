@@ -47,11 +47,11 @@ Route to agent "supplier" when the user asks about suppliers themselves.
 - "verified suppliers", "suppliers in [city/state]"
 
 PRIORITY 4 — PRODUCT INTENT
-Route to agent "product" ONLY when the user wants to discover or browse products
-and none of the higher-priority intents apply.
+Route to agent "product" ONLY when the user wants to discover or browse products, or requests product analytics and counts, and none of the higher-priority intents apply.
 - "show me X", "find X", "search for X", "I need X", "I want X"
 - "product availability", "product price", "compare products"
 - "recommend products", "featured products"
+- Analytics queries: "total items present in all categories", "how many products are available?", "number of products", "product count", "count products in biscuits", "total products in beverages", "how many categories exist?", "total categories", "total subcategories", "category statistics", "inventory summary", "product statistics"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESPONSE FORMATS

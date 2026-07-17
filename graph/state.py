@@ -11,7 +11,6 @@ class AgentState(TypedDict):
     execution_plan: list
     current_step: int
     agent_results: dict
-
     final_response: str
 
 def merge_agent_results(existing_results: dict, agent_name: str, agent_result: dict) -> dict:

@@ -12,12 +12,11 @@ from tools.order_tools import _get_order_details_impl, _search_orders_impl
 ORDER_PROMPT = """
 You are an Order Assistant for a B2B marketplace.
 
-Rules:
-- Never ask the user for a buyer ID.
-- Always use the authenticated buyer ID from backend state.
-- Use search_orders for order history, recent orders, delivered orders, pending orders, and cancelled orders.
-- Use get_order_details for a specific order number, tracking request, or invoice/order summary request.
-- Always keep the search scoped to the current buyer only.
+Classify the request before selecting a tool.
+Use search_orders for order history, recent orders, delivered orders, pending orders, and cancelled orders.
+Use get_order_details only for a specific order number, tracking request, or invoice/order summary request.
+Never ask the user for a buyer ID.
+Always use the authenticated buyer ID from backend state.
 """
 
 
@@ -32,6 +31,16 @@ STATUS_KEYWORDS = {
     "unpaid": "Unpaid",
     "refunded": "Refunded",
 }
+DETAIL_KEYWORDS = (
+    "track",
+    "tracking",
+    "details",
+    "detail",
+    "summary",
+    "invoice",
+    "shipping",
+    "delivery",
+)
 
 
 def _get_user_query(state: dict[str, Any]) -> str:
@@ -81,19 +90,15 @@ def _should_fetch_order_details(user_query: str, order_number: str | None) -> bo
     if not order_number:
         return False
     normalized = user_query.lower()
-    return any(
-        keyword in normalized
-        for keyword in [
-            "track",
-            "tracking",
-            "details",
-            "detail",
-            "summary",
-            "invoice",
-            "shipping",
-            "delivery",
-        ]
-    )
+    return any(keyword in normalized for keyword in DETAIL_KEYWORDS)
+
+
+def _detect_order_intent(user_query: str) -> dict[str, str]:
+    normalized = (user_query or "").strip().lower()
+    order_number = _extract_order_number(normalized)
+    if order_number and _should_fetch_order_details(normalized, order_number):
+        return {"intent": "order_details", "tool": "get_order_details", "reason": "The user asked about a specific order."}
+    return {"intent": "order_history", "tool": "search_orders", "reason": "The user asked about order history or order status."}
 
 
 def orders_agent(state):
@@ -109,16 +114,13 @@ def orders_agent(state):
         }
         return {
             "messages": [HumanMessage(content="I couldn't access your order history right now.")],
-            "agent_results": merge_agent_results(
-                state.get("agent_results", {}),
-                "orders",
-                response,
-            ),
+            "agent_results": merge_agent_results(state.get("agent_results", {}), "orders", response),
             "current_step": state["current_step"] + 1,
         }
 
+    intent_result = _detect_order_intent(user_query)
     order_number = _extract_order_number(user_query)
-    if _should_fetch_order_details(user_query, order_number):
+    if intent_result["tool"] == "get_order_details":
         order_result = _get_order_details_impl(buyer_id=buyer_id, order_number=order_number or "")
     else:
         order_result = _search_orders_impl(
@@ -138,6 +140,9 @@ def orders_agent(state):
                 "original_query": user_query,
                 "buyer_id_present": bool(buyer_id),
                 "order_number": order_number,
+                "detected_intent": intent_result["intent"],
+                "selected_tool": intent_result["tool"],
+                "reason": intent_result["reason"],
                 "result": order_result,
             },
         ),

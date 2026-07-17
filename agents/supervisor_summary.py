@@ -141,9 +141,58 @@ def _group_products_by_supplier(products: list[dict]) -> list[tuple[str, str | N
     return grouped
 
 
+def _format_analytics_result(product_payload: dict) -> str | None:
+    if not isinstance(product_payload, dict):
+        return None
+
+    analytics_result = product_payload.get("analytics_result") or {}
+    if not isinstance(analytics_result, dict):
+        return None
+
+    if analytics_result.get("success") is False:
+        return analytics_result.get("message") or "I couldn't retrieve the requested inventory information right now."
+
+    selected_tool = product_payload.get("selected_tool")
+    if selected_tool == "get_total_product_count":
+        return f"Total products available: {analytics_result.get('total_products', 0)}"
+
+    if selected_tool == "get_inventory_summary":
+        return (
+            "Inventory Summary\n\n"
+            f"• Total Categories: {analytics_result.get('total_categories', 0)}\n"
+            f"• Total Subcategories: {analytics_result.get('total_subcategories', 0)}\n"
+            f"• Total Products: {analytics_result.get('total_products', 0)}"
+        )
+
+    if selected_tool == "get_subcategory_statistics":
+        subcategories = analytics_result.get("subcategories") or []
+        if not subcategories:
+            return "I couldn't find any subcategory statistics right now."
+        lines = ["Subcategory Statistics", ""]
+        for item in subcategories:
+            lines.append(f"• {item.get('subcategory', 'Unknown')} – {item.get('product_count', 0)} products")
+        lines.append("")
+        lines.append(f"Total Products: {analytics_result.get('total_products', 0)}")
+        return "\n".join(lines)
+
+    categories = analytics_result.get("categories") or []
+    if not categories:
+        return "I couldn't find any category statistics right now."
+
+    lines = ["Category Statistics", ""]
+    for item in categories:
+        lines.append(f"• {item.get('category', 'Unknown')} – {item.get('product_count', 0)} products")
+    lines.append("")
+    lines.append(f"Total Products: {analytics_result.get('total_products', 0)}")
+    return "\n".join(lines)
+
+
 def _format_product_result(product_payload: dict) -> str | None:
     if not isinstance(product_payload, dict):
         return None
+
+    if product_payload.get("result_type") == "analytics":
+        return _format_analytics_result(product_payload)
 
     selected_products = product_payload.get("selected_products") or []
     if not selected_products:
@@ -171,15 +220,19 @@ def _format_product_result(product_payload: dict) -> str | None:
         keyword = product_payload.get("extracted_keyword") or product_payload.get("original_query") or "your request"
         return f"I couldn't find any products matching '{keyword}'. Try a different search term or browse our categories."
 
+    original_query = (product_payload.get("original_query") or "").lower()
+    if any(k in original_query for k in ["single", "one item", "one product", "highest", "lowest", "cheapest", "most expensive", "costliest"]):
+        selected_products = selected_products[:1]
+
     selected_products = _sort_products_by_supplier_rating([product for product in selected_products if isinstance(product, dict)])
     grouped_products = _group_products_by_supplier(selected_products[:10])
 
     total_count = len(selected_products)
     if len(grouped_products) == 1:
         supplier_name, location, products = grouped_products[0]
-        header = f"I found {total_count} products from {supplier_name} matching your request."
+        header = f"I found {total_count} product{'s' if total_count != 1 else ''} from {supplier_name} matching your request."
         if location:
-            header = f"I found {total_count} products from {supplier_name} in {location} matching your request."
+            header = f"I found {total_count} product{'s' if total_count != 1 else ''} from {supplier_name} in {location} matching your request."
         lines = [header, ""]
         for index, product in enumerate(products, start=1):
             name = product.get("name") or "Unnamed product"
@@ -197,10 +250,9 @@ def _format_product_result(product_payload: dict) -> str | None:
                 lines.append(f"   • Delivery: {delivery_days} days")
             lines.append("")
 
-        lines.append("Would you like more details about any product or would you like to create an RFQ?")
         return "\n".join(line for line in lines if line is not None).strip()
 
-    lines = [f"I found {total_count} products matching your request.", ""]
+    lines = [f"I found {total_count} product{'s' if total_count != 1 else ''} matching your request.", ""]
     global_index = 1
     for supplier_name, location, products in grouped_products:
         supplier_header = supplier_name
@@ -414,51 +466,45 @@ def _format_supplier_result(supplier_payload: dict) -> str | None:
 
 def supervisor_summary_agent(state):
     agent_results = state.get("agent_results", {})
+    responses = []
 
     # --- Buyer Profile ---
     buyer_info = agent_results.get("buyer_info") or agent_results.get("buyer")
     if isinstance(buyer_info, dict):
         if buyer_info.get("success") is False:
-            response_text = "I'm having trouble retrieving your profile right now. Please try again in a few moments."
+            responses.append("I'm having trouble retrieving your profile right now. Please try again in a few moments.")
         elif buyer_info.get("found") is False:
-            response_text = "I couldn't find your profile information. Please contact support."
+            responses.append("I couldn't find your profile information. Please contact support.")
         else:
             # Legacy format (no success key) or success:True,found:True
             formatted_details = _format_buyer_info(buyer_info)
-            response_text = f"Here are your details:\n{formatted_details}"
-        return {"final_response": response_text, "messages": [HumanMessage(content=response_text)]}
+            responses.append(f"Here are your details:\n{formatted_details}")
 
     # --- Product Results ---
     product_info = agent_results.get("product")
     if isinstance(product_info, dict):
         formatted_products = _format_product_result(product_info)
         if formatted_products:
-            return {
-                "final_response": formatted_products,
-                "messages": [HumanMessage(content=formatted_products)],
-            }
+            responses.append(formatted_products)
 
     # --- Order Results ---
     order_info = agent_results.get("orders")
     if isinstance(order_info, dict):
         formatted_orders = _format_order_result(order_info)
         if formatted_orders:
-            return {
-                "final_response": formatted_orders,
-                "messages": [HumanMessage(content=formatted_orders)],
-            }
+            responses.append(formatted_orders)
 
     # --- Supplier Results ---
     supplier_info = agent_results.get("supplier")
     if isinstance(supplier_info, dict):
         formatted_suppliers = _format_supplier_result(supplier_info)
         if formatted_suppliers:
-            return {
-                "final_response": formatted_suppliers,
-                "messages": [HumanMessage(content=formatted_suppliers)],
-            }
+            responses.append(formatted_suppliers)
 
-    # --- LLM Fallback for unrecognised agent combinations ---
+    if responses:
+        final_text = "\n\n".join(responses)
+        return {"final_response": final_text, "messages": [HumanMessage(content=final_text)]}
+
     result_text = "\n".join(
         f"{agent_name}: {repr(payload)}" for agent_name, payload in sorted(agent_results.items())
     )
