@@ -276,7 +276,6 @@ def _format_product_result(product_payload: dict) -> str | None:
             lines.append("")
             global_index += 1
 
-    lines.append("Would you like more details about any product or would you like to create an RFQ?")
     return "\n".join(line for line in lines if line is not None).strip()
 
 
@@ -406,7 +405,6 @@ def _format_order_result(order_payload: dict) -> str | None:
                         lines.append(f"   • Product: {product_name}")
             lines.append("")
 
-        lines.append("Would you like more details about any order?")
         return "\n".join(lines).strip()
 
     return None
