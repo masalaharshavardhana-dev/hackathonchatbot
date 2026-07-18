@@ -39,27 +39,36 @@ def _detect_analytics_intent(user_query: str, goal: str) -> str | None:
     # Check subcategories list / stats
     if (
         "retrieve all subcategories" in goal_norm
+        or "retrieve subcategories" in goal_norm
         or "get subcategories" in goal_norm
         or "subcategory statistics" in goal_norm
         or "list subcategories" in goal_norm
+        or "show subcategories" in goal_norm
         or "show me all subcategories" in query_norm
         or "list all subcategories" in query_norm
         or "subcategory statistics" in query_norm
-        or query_norm in ["subcategories", "all subcategories", "show subcategories", "list subcategories"]
+        or "available subcategories" in query_norm
+        or "subcategories are available" in query_norm
+        or "what subcategories" in query_norm
+        or query_norm in ["subcategories", "all subcategories", "show subcategories", "list subcategories", "what subcategories"]
     ):
         return "get_subcategory_statistics"
 
     # Check categories list / stats
     if (
         "retrieve all product categories" in goal_norm
+        or "retrieve product categories" in goal_norm
         or "get categories" in goal_norm
         or "category statistics" in goal_norm
         or "list categories" in goal_norm
+        or "show categories" in goal_norm
         or "show me all categories" in query_norm
         or "list all categories" in query_norm
-        or "available categories" in query_norm
         or "category statistics" in query_norm
-        or query_norm in ["categories", "all categories", "show categories", "list categories"]
+        or "available categories" in query_norm
+        or "categories are available" in query_norm
+        or "what categories" in query_norm
+        or query_norm in ["categories", "all categories", "show categories", "list categories", "what categories"]
     ):
         return "get_category_statistics"
 
@@ -69,7 +78,7 @@ def _detect_analytics_intent(user_query: str, goal: str) -> str | None:
         or "inventory statistics" in goal_norm
         or "inventory summary" in query_norm
         or "inventory statistics" in query_norm
-        or query_norm in ["inventory", "inventory summary"]
+        or query_norm in ["inventory", "inventory summary", "inventory statistics"]
     ):
         return "get_inventory_summary"
 
@@ -79,6 +88,7 @@ def _detect_analytics_intent(user_query: str, goal: str) -> str | None:
         or "product count" in goal_norm
         or "count products" in goal_norm
         or "how many products" in goal_norm
+        or "total products" in goal_norm
         or "total product count" in query_norm
         or "how many products" in query_norm
         or "number of products" in query_norm
@@ -88,8 +98,8 @@ def _detect_analytics_intent(user_query: str, goal: str) -> str | None:
     ):
         return "get_total_product_count"
 
-    # Fallback checks with indicators to catch variations
-    has_indicator = any(ind in query_norm or ind in goal_norm for ind in ["how many", "total", "count", "show", "list", "get", "statistics", "summary", "exist", "all"])
+    # Fallback checks with indicators to catch variations (excluding general search terms like show, list, get, all)
+    has_indicator = any(ind in query_norm or ind in goal_norm for ind in ["how many", "total", "count", "statistics", "summary", "exist"])
     if has_indicator:
         if "subcategory" in query_norm or "subcategories" in query_norm or "subcategory" in goal_norm or "subcategories" in goal_norm:
             return "get_subcategory_statistics"
